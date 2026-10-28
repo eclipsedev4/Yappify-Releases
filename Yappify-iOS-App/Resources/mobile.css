@@ -1,3 +1,0 @@
-@media(max-width:700px){
- .ym-modal{padding:8px!important}.ym-modal-card{width:100%!important;max-width:100%!important;max-height:88dvh!important}.ym-modal-body{min-width:0;overflow:auto}.ym-modal-foot{flex-wrap:wrap}.ym-modal input,.ym-modal textarea,.ym-modal select{font-size:16px!important;max-width:100%;box-sizing:border-box}.studio-code-editor{height: min(400px,48dvh)!important}.yappify-studio{min-width:0!important}.studio-tiles{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ym-modal button{min-height:44px}.studio-asset-row{overflow-wrap:anywhere;flex-wrap:wrap}
-}
