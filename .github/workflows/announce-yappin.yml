@@ -1,0 +1,55 @@
+name: Announce Yappify releases
+on:
+  release:
+    types: [published]
+permissions: {}
+concurrency:
+  group: yappin-release-${{ github.event.release.id }}
+  cancel-in-progress: false
+jobs:
+  announce:
+    if: github.repository == 'eclipsedev4/Yappify-Releases' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send release notes and download links to Yappin
+        env:
+          YAPPIN_RELEASE_WEBHOOK: ${{ secrets.YAPPIN_RELEASE_WEBHOOK }}
+        shell: bash
+        run: |
+          node <<'YAPPIFY_SCRIPT'
+          const fs = require('node:fs');
+          const release = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')).release;
+          const repo = 'eclipsedev4/Yappify-Releases';
+          const plain = value => String(value || '').replaceAll('@', '@\u200b');
+          function releaseURL(value) {
+            const url = new URL(value);
+            if (url.origin !== 'https://github.com' || !url.pathname.startsWith('/' + repo + '/releases/')) throw Error('Unexpected release link');
+            return url.href;
+          }
+          async function main() {
+            if (!release || release.draft) throw Error('A published release is required');
+            const assets = (release.assets || []).filter(a => /\.(zip|ipa|exe)$/i.test(a.name)).slice(0, 5);
+            if (!assets.length) throw Error('Upload the app download before publishing the release');
+            const downloads = assets.map(a => plain(a.name) + ': ' + releaseURL(a.browser_download_url)).join('\n');
+            const title = plain(release.name || release.tag_name).slice(0, 160);
+            const footer = '\n\nDownloads:\n' + downloads + '\n\nRelease: ' + releaseURL(release.html_url) + '\nUnofficial — not affiliated with Yapper.';
+            const header = '<@&383191a3-71d5-4ce6-8853-41c801833d63>\n**' + title + (release.prerelease ? ' (Beta)' : '') + '**\n\n';
+            const available = 1900 - header.length - footer.length;
+            if (available < 50) throw Error('Download links are too long for one announcement');
+            let notes = plain(release.body || 'See the release page for details.');
+            if (notes.length > available) notes = notes.slice(0, available - 30) + '\n…Full notes on release page.';
+            const payload = {content: header + notes + footer, allowed_mentions: {parse: [], roles: ['383191a3-71d5-4ce6-8853-41c801833d63']}};
+            if (process.env.PREVIEW_ONLY === '1') { console.log(JSON.stringify(payload)); return; }
+            const secret = process.env.YAPPIN_RELEASE_WEBHOOK;
+            if (!secret) throw Error('Add the YAPPIN_RELEASE_WEBHOOK repository Actions secret');
+            const webhook = new URL(secret);
+            if (webhook.origin !== 'https://www.yapin.gg' || !/^\/api\/webhooks\/[a-f0-9-]+\/[a-f0-9]+$/.test(webhook.pathname) || webhook.search || webhook.hash) throw Error('Invalid Yappin webhook configuration');
+            let response;
+            try { response = await fetch(webhook, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000), headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)}); }
+            catch { throw Error('Webhook delivery uncertain. Check the channel before sending again; no automatic retry was attempted.'); }
+            if (!response.ok) throw Error('Yappin rejected the announcement (HTTP ' + response.status + ').');
+            console.log('Release announcement delivered.');
+          }
+          main().catch(error => { console.error(error.message); process.exitCode = 1; });
+          YAPPIFY_SCRIPT
