@@ -1,0 +1,39 @@
+name: Build unsigned iOS IPA
+on:
+  push:
+    branches: [ios]
+    paths-ignore: ['README.md', '.github/workflows/announce-yappin.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: yappify-ios-unsigned
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare verified bundled resources
+        run: bash scripts/prepare-resources.sh
+      - name: Install project generator
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Build unsigned iPhone app
+        shell: bash
+        run: bash scripts/build-unsigned-ipa.sh
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yappify-iOS-unsigned
+          path: |
+            dist/Yappify.ipa
+            dist/Yappify.ipa.sha256
+          if-no-files-found: error
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-build-log
+          path: build/xcodebuild.log
+          if-no-files-found: ignore
